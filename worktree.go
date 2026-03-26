@@ -24,7 +24,7 @@ type Prompter interface {
 }
 
 func Run(config Config, worktrees []Worktree, prompter Prompter) (result string, err error) {
-	if len(worktrees) == 0 {
+	if len(worktrees) <= 1 {
 		return createNewWorktree(config, prompter)
 	}
 
@@ -32,6 +32,7 @@ func Run(config Config, worktrees []Worktree, prompter Prompter) (result string,
 	for _, wt := range worktrees {
 		options = append(options, fmt.Sprintf("%s (%s)", wt.Branch, wt.Path))
 	}
+	options = append(options, "Delete a worktree")
 
 	selected, err := prompter.Select("Select worktree:", options)
 	if err != nil {
@@ -41,9 +42,28 @@ func Run(config Config, worktrees []Worktree, prompter Prompter) (result string,
 	if selected == 0 {
 		return createNewWorktree(config, prompter)
 	}
+	if selected == len(worktrees)+1 {
+		return deleteWorktree(worktrees, prompter)
+	}
 
 	wt := worktrees[selected-1]
 	return fmt.Sprintf(`cd "%s"`, wt.Path), nil
+}
+
+func deleteWorktree(worktrees []Worktree, prompter Prompter) (result string, err error) {
+	candidates := worktrees[1:] // exclude the main worktree
+	options := make([]string, len(candidates))
+	for i, wt := range candidates {
+		options[i] = fmt.Sprintf("%s (%s)", wt.Branch, wt.Path)
+	}
+
+	selected, err := prompter.Select("Delete which worktree?", options)
+	if err != nil {
+		return "", err
+	}
+
+	wt := candidates[selected]
+	return fmt.Sprintf(`git worktree remove "%s"; git branch -d %s`, wt.Path, wt.Branch), nil
 }
 
 var validFeatureName = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$`)
@@ -75,6 +95,9 @@ func ParsePorcelain(output string) (results []Worktree) {
 				current = Worktree{}
 			}
 		}
+	}
+	if current.Path != "" {
+		results = append(results, current)
 	}
 	return results
 }
