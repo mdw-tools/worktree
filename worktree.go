@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -55,9 +56,9 @@ func createNewWorktree(config Config, prompter Prompter) (result string, err err
 	if !validFeatureName.MatchString(feature) {
 		return "", fmt.Errorf("invalid feature name %q: must contain only alphanumerics and hyphens", feature)
 	}
-	branch := config.User + "/" + feature
-	path := config.WorkDir + "/" + config.ProjectName + "/" + feature
-	return fmt.Sprintf(`git branch %s; git worktree add %s %s; cd "$_"`, branch, path, branch), nil
+	branch := filepath.Join(config.User, feature)
+	path := filepath.Join(config.WorkDir, config.ProjectName, feature)
+	return fmt.Sprintf(`git branch %s; git worktree add "%s" %s; cd "%s"`, branch, path, branch, path), nil
 }
 
 func ParsePorcelain(output string) (results []Worktree) {

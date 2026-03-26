@@ -91,7 +91,7 @@ func TestCreateNewWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git branch mikewhat/my-feature; git worktree add /Users/mike/work/project/my-feature mikewhat/my-feature; cd "$_"`
+	expected := `git branch mikewhat/my-feature; git worktree add "/Users/mike/work/project/my-feature" mikewhat/my-feature; cd "/Users/mike/work/project/my-feature"`
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -133,7 +133,7 @@ func TestNoWorktreesSkipsMenu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git branch mikewhat/new-feature; git worktree add /Users/mike/work/project/new-feature mikewhat/new-feature; cd "$_"`
+	expected := `git branch mikewhat/new-feature; git worktree add "/Users/mike/work/project/new-feature" mikewhat/new-feature; cd "/Users/mike/work/project/new-feature"`
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
