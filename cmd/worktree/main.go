@@ -17,7 +17,7 @@ var Version = "dev"
 func main() {
 	flags := flag.NewFlagSet(fmt.Sprintf("%s @ %s", filepath.Base(os.Args[0]), Version), flag.ExitOnError)
 	user := flags.String("user", "mikewhat", "User branch prefix")
-	workDir := flags.String("workdir", filepath.Join(os.Getenv("HOME"), "work"), "Working path prefix for new worktrees")
+	workDir := flags.String("workdir", filepath.Join(os.Getenv("CODEPATH"), "work"), "Working path prefix for new worktrees")
 	flags.Usage = func() {
 		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
 		_, _ = fmt.Fprintf(flags.Output(), "%s [flags]\n", filepath.Base(os.Args[0]))
