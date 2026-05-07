@@ -49,6 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	_, _ = fmt.Fprintln(os.Stderr, "→ Copy the command below, or re-run piped to `bash`:")
 	fmt.Print(result)
 }
 
