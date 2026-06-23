@@ -45,12 +45,65 @@ func main() {
 	}
 
 	prompter := &huhPrompter{}
-	result, err := worktree.Run(config, worktrees, prompter)
+	plan, err := worktree.Run(config, worktrees, prompter)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, _ = fmt.Fprintln(os.Stderr, "→ Copy the command below, or re-run piped to `bash`:")
-	fmt.Print(result)
+
+	if len(plan.Commands) > 0 {
+		ok, err := prompter.Confirm("Run these commands?", commandList(plan.Commands))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !ok {
+			_, _ = fmt.Fprintln(os.Stderr, "aborted")
+			return
+		}
+		for _, command := range plan.Commands {
+			if err := runCommand(command); err != nil {
+				log.Fatalf("%s: %v", command, err)
+			}
+		}
+	}
+
+	if plan.Dir != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "→ Entering %s (type `exit` to return)\n", plan.Dir)
+		if err := spawnShell(plan.Dir); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func commandList(commands []worktree.Command) (result string) {
+	lines := make([]string, len(commands))
+	for i, command := range commands {
+		lines[i] = command.String()
+	}
+	return strings.Join(lines, "\n")
+}
+
+func runCommand(command worktree.Command) error {
+	cmd := exec.Command(command.Name, command.Args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func spawnShell(dir string) error {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	// Start a login shell (-l) so it re-sources the user's profile and defines
+	// any prompt helpers (functions aren't inherited by child processes), just
+	// like opening a fresh terminal tab.
+	cmd := exec.Command(shell, "-l")
+	cmd.Dir = dir
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func gitOutput(args ...string) (string, error) {

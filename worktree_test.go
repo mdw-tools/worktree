@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -90,9 +91,9 @@ func TestSelectExistingWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `cd "/Users/mike/work/project/feature-one"`
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	expected := Plan{Dir: "/Users/mike/work/project/feature-one"}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }
 
@@ -114,9 +115,15 @@ func TestCreateNewWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git branch mikewhat/my-feature; git worktree add "/Users/mike/work/project/my-feature" mikewhat/my-feature; cd "/Users/mike/work/project/my-feature"`
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"branch", "mikewhat/my-feature"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/my-feature", "mikewhat/my-feature"}},
+		},
+		Dir: "/Users/mike/work/project/my-feature",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }
 
@@ -156,9 +163,15 @@ func TestNoWorktreesSkipsMenu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git branch mikewhat/new-feature; git worktree add "/Users/mike/work/project/new-feature" mikewhat/new-feature; cd "/Users/mike/work/project/new-feature"`
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"branch", "mikewhat/new-feature"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/new-feature", "mikewhat/new-feature"}},
+		},
+		Dir: "/Users/mike/work/project/new-feature",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }
 
@@ -180,9 +193,14 @@ func TestDeleteWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git worktree remove "/Users/mike/work/project/feature-one"; git branch -d mikewhat/feature-one`
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"worktree", "remove", "/Users/mike/work/project/feature-one"}},
+			{Name: "git", Args: []string{"branch", "-d", "mikewhat/feature-one"}},
+		},
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }
 
@@ -204,8 +222,14 @@ func TestOnlyMainWorktreeSkipsToCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `git branch mikewhat/new-feature; git worktree add "/Users/mike/work/project/new-feature" mikewhat/new-feature; cd "/Users/mike/work/project/new-feature"`
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"branch", "mikewhat/new-feature"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/new-feature", "mikewhat/new-feature"}},
+		},
+		Dir: "/Users/mike/work/project/new-feature",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }

@@ -18,12 +18,30 @@ type Config struct {
 	ProjectName string
 }
 
+// Command is a single program invocation to be run via exec.Command.
+type Command struct {
+	Name string
+	Args []string
+}
+
+func (this Command) String() string {
+	return strings.TrimSpace(this.Name + " " + strings.Join(this.Args, " "))
+}
+
+// Plan describes the side effects to carry out: a sequence of commands to
+// execute (after confirmation), and a directory to land in afterward. An empty
+// Dir means "stay where you are".
+type Plan struct {
+	Commands []Command
+	Dir      string
+}
+
 type Prompter interface {
 	Select(prompt string, options []string) (int, error)
 	Input(prompt string) (string, error)
 }
 
-func Run(config Config, worktrees []Worktree, prompter Prompter) (result string, err error) {
+func Run(config Config, worktrees []Worktree, prompter Prompter) (result Plan, err error) {
 	if len(worktrees) <= 1 {
 		return createNewWorktree(config, prompter)
 	}
@@ -36,7 +54,7 @@ func Run(config Config, worktrees []Worktree, prompter Prompter) (result string,
 
 	selected, err := prompter.Select("Select worktree:", options)
 	if err != nil {
-		return "", err
+		return Plan{}, err
 	}
 
 	if selected == 0 {
@@ -47,10 +65,10 @@ func Run(config Config, worktrees []Worktree, prompter Prompter) (result string,
 	}
 
 	wt := worktrees[selected-1]
-	return fmt.Sprintf(`cd "%s"`, wt.Path), nil
+	return Plan{Dir: wt.Path}, nil
 }
 
-func deleteWorktree(worktrees []Worktree, prompter Prompter) (result string, err error) {
+func deleteWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err error) {
 	candidates := worktrees[1:] // exclude the main worktree
 	options := make([]string, len(candidates))
 	for i, wt := range candidates {
@@ -59,26 +77,37 @@ func deleteWorktree(worktrees []Worktree, prompter Prompter) (result string, err
 
 	selected, err := prompter.Select("Delete which worktree?", options)
 	if err != nil {
-		return "", err
+		return Plan{}, err
 	}
 
 	wt := candidates[selected]
-	return fmt.Sprintf(`git worktree remove "%s"; git branch -d %s`, wt.Path, wt.Branch), nil
+	return Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"worktree", "remove", wt.Path}},
+			{Name: "git", Args: []string{"branch", "-d", wt.Branch}},
+		},
+	}, nil
 }
 
 var validFeatureName = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$`)
 
-func createNewWorktree(config Config, prompter Prompter) (result string, err error) {
+func createNewWorktree(config Config, prompter Prompter) (result Plan, err error) {
 	feature, err := prompter.Input("Feature name (alphanumeric and hyphens only):")
 	if err != nil {
-		return "", err
+		return Plan{}, err
 	}
 	if !validFeatureName.MatchString(feature) {
-		return "", fmt.Errorf("invalid feature name %q: must contain only alphanumerics and hyphens", feature)
+		return Plan{}, fmt.Errorf("invalid feature name %q: must contain only alphanumerics and hyphens", feature)
 	}
 	branch := filepath.Join(config.User, feature)
 	path := filepath.Join(config.WorkDir, config.ProjectName, feature)
-	return fmt.Sprintf(`git branch %s; git worktree add "%s" %s; cd "%s"`, branch, path, branch, path), nil
+	return Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"branch", branch}},
+			{Name: "git", Args: []string{"worktree", "add", path, branch}},
+		},
+		Dir: path,
+	}, nil
 }
 
 func ParsePorcelain(output string) (results []Worktree) {

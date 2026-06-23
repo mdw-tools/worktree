@@ -26,3 +26,12 @@ func (this *huhPrompter) Input(prompt string) (result string, err error) {
 		Run()
 	return result, err
 }
+
+func (this *huhPrompter) Confirm(title, description string) (result bool, err error) {
+	err = huh.NewConfirm().
+		Title(title).
+		Description(description).
+		Value(&result).
+		Run()
+	return result, err
+}
