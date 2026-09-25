@@ -10,6 +10,15 @@ import (
 type Worktree struct {
 	Path   string
 	Branch string
+	Merged bool // Branch has been merged into the main worktree's branch.
+}
+
+func (this Worktree) String() string {
+	result := fmt.Sprintf("%s (%s)", this.Branch, this.Path)
+	if this.Merged {
+		result += " [merged]"
+	}
+	return result
 }
 
 type Config struct {
@@ -48,7 +57,7 @@ func Run(config Config, worktrees []Worktree, prompter Prompter) (result Plan, e
 
 	options := []string{"Create new worktree"}
 	for _, wt := range worktrees {
-		options = append(options, fmt.Sprintf("%s (%s)", wt.Branch, wt.Path))
+		options = append(options, wt.String())
 	}
 	options = append(options, "Delete a worktree")
 
@@ -72,7 +81,7 @@ func deleteWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err e
 	candidates := worktrees[1:] // exclude the main worktree
 	options := make([]string, len(candidates))
 	for i, wt := range candidates {
-		options[i] = fmt.Sprintf("%s (%s)", wt.Branch, wt.Path)
+		options[i] = wt.String()
 	}
 
 	selected, err := prompter.Select("Delete which worktree?", options)
@@ -127,6 +136,23 @@ func ParsePorcelain(output string) (results []Worktree) {
 	}
 	if current.Path != "" {
 		results = append(results, current)
+	}
+	return results
+}
+
+// MarkMerged flags each non-main worktree whose branch appears in merged,
+// which is expected to be the output of
+// `git branch --merged <main-branch> --format=%(refname:short)`.
+func MarkMerged(worktrees []Worktree, merged string) (results []Worktree) {
+	branches := make(map[string]bool)
+	for _, line := range strings.Split(merged, "\n") {
+		if branch := strings.TrimSpace(line); branch != "" {
+			branches[branch] = true
+		}
+	}
+	for i, wt := range worktrees {
+		wt.Merged = i > 0 && wt.Branch != "" && branches[wt.Branch]
+		results = append(results, wt)
 	}
 	return results
 }

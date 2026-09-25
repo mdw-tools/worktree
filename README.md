@@ -30,5 +30,27 @@ the tool then spawns a shell in the new worktree.
 A worktree can also be deleted from the menu, which runs
 `git worktree remove <path>` and `git branch -d <branch>` after confirmation.
 
+Worktrees whose branch has already been merged into the main worktree's branch
+(per `git branch --merged`) are labeled `[merged]` in both the main menu and
+the delete menu, as a hint about what can be deleted.
+
 Because the git operations now run in-process behind a confirmation prompt, the
 tool no longer needs to be piped to `bash` or `pbcopy`.
+
+## worktree-cleanup
+
+A separate tool for periodically sweeping away finished worktrees across all
+projects. It can be run from anywhere:
+
+1. It finds every repository with a worktree under `<workdir>/<project>/`
+   (`-workdir` defaults to `$CODEPATH/work`, same as `worktree`).
+2. For each repository, it lists all worktrees, labeling those whose branch
+   has been merged into the main worktree's branch (per `git branch --merged`).
+3. For each merged worktree, one at a time, it asks whether to delete it. On
+   confirmation it immediately runs `git worktree remove <path>` and
+   `git branch -d <branch>` (both against the main worktree).
+
+A worktree that fails to delete (e.g. one with uncommitted changes, which
+`git worktree remove` refuses) is reported at the end without stopping the
+rest. Note that a branch with no commits of its own (e.g. one just created)
+counts as merged, and squash-merged branches do not.

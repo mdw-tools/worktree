@@ -10,11 +10,13 @@ type fakePrompter struct {
 	selectIndices []int
 	selectErrs    []error
 	selectCall    int
+	selectOptions [][]string
 	inputText     string
 	inputErr      error
 }
 
-func (this *fakePrompter) Select(_ string, _ []string) (int, error) {
+func (this *fakePrompter) Select(_ string, options []string) (int, error) {
+	this.selectOptions = append(this.selectOptions, options)
 	i := this.selectCall
 	this.selectCall++
 	var idx int
@@ -231,5 +233,63 @@ func TestOnlyMainWorktreeSkipsToCreate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
+	}
+}
+
+func TestMarkMerged(t *testing.T) {
+	worktrees := []Worktree{
+		{Path: "/Users/mike/src/project", Branch: "main"},
+		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
+		{Path: "/Users/mike/work/project/feature-two", Branch: "mikewhat/feature-two"},
+		{Path: "/Users/mike/work/project/detached"},
+	}
+	merged := "main\nmikewhat/feature-two\nsome-other-branch\n"
+
+	results := MarkMerged(worktrees, merged)
+
+	expected := []Worktree{
+		{Path: "/Users/mike/src/project", Branch: "main"}, // the main worktree is never flagged
+		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
+		{Path: "/Users/mike/work/project/feature-two", Branch: "mikewhat/feature-two", Merged: true},
+		{Path: "/Users/mike/work/project/detached"},
+	}
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("expected %+v, got %+v", expected, results)
+	}
+}
+
+func TestMergedWorktreesAreFlaggedInMenus(t *testing.T) {
+	worktrees := []Worktree{
+		{Path: "/Users/mike/src/project", Branch: "main"},
+		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
+		{Path: "/Users/mike/work/project/feature-two", Branch: "mikewhat/feature-two", Merged: true},
+	}
+	prompter := &fakePrompter{selectIndices: []int{4, 0}} // 4 = "Delete a worktree", 0 = feature-one
+	config := Config{
+		User:        "mikewhat",
+		WorkDir:     "/Users/mike/work",
+		ProjectName: "project",
+	}
+
+	_, err := Run(config, worktrees, prompter)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := [][]string{
+		{
+			"Create new worktree",
+			"main (/Users/mike/src/project)",
+			"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
+			"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
+			"Delete a worktree",
+		},
+		{
+			"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
+			"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
+		},
+	}
+	if !reflect.DeepEqual(prompter.selectOptions, expected) {
+		t.Errorf("expected %+v, got %+v", expected, prompter.selectOptions)
 	}
 }

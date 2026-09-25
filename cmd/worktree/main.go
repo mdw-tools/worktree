@@ -37,6 +37,14 @@ func main() {
 	}
 
 	worktrees := worktree.ParsePorcelain(porcelain)
+	if len(worktrees) > 0 && worktrees[0].Branch != "" {
+		primary := worktrees[0]
+		merged, err := gitOutput("-C", primary.Path, "branch", "--merged", primary.Branch, "--format=%(refname:short)")
+		if err != nil {
+			log.Fatal(err)
+		}
+		worktrees = worktree.MarkMerged(worktrees, merged)
+	}
 
 	config := worktree.Config{
 		User:        *user,
