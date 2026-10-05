@@ -51,6 +51,12 @@ func main() {
 		worktrees = worktree.MarkMerged(worktrees, merged)
 	}
 
+	refs, err := gitOutput("for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes")
+	if err != nil {
+		log.Fatal(err)
+	}
+	branches := worktree.ParseBranches(refs)
+
 	config := worktree.Config{
 		User:        *user,
 		WorkDir:     *workDir,
@@ -58,7 +64,7 @@ func main() {
 	}
 
 	prompter := &huhPrompter{}
-	plan, err := worktree.Run(config, worktrees, prompter)
+	plan, err := worktree.Run(config, worktrees, branches, prompter)
 	if err != nil {
 		log.Fatal(err)
 	}

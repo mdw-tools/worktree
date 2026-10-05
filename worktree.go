@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -50,41 +51,62 @@ type Prompter interface {
 	Input(prompt string) (string, error)
 }
 
-func Run(config Config, worktrees []Worktree, prompter Prompter) (result Plan, err error) {
-	if len(worktrees) <= 1 {
-		return createNewWorktree(config, prompter)
-	}
+// Branch is an existing branch from which a worktree may be created. Remote is
+// empty for a local branch; otherwise the branch exists only on that remote.
+type Branch struct {
+	Name   string
+	Remote string
+}
 
-	options := []string{"Create new worktree"}
-	for _, wt := range worktrees {
-		options = append(options, wt.String())
+func (this Branch) String() string {
+	if this.Remote == "" {
+		return this.Name
 	}
-	options = append(options, "Delete a worktree")
+	return this.Remote + "/" + this.Name
+}
 
-	selected, err := prompter.Select("Select worktree:", options)
+const (
+	optionEnter            = "Enter worktree"
+	optionCreate           = "Create new worktree"
+	optionCreateFromBranch = "Create worktree from branch"
+	optionDelete           = "Delete worktree"
+)
+
+func Run(config Config, worktrees []Worktree, branches []Branch, prompter Prompter) (result Plan, err error) {
+	options := []string{optionEnter, optionCreate, optionCreateFromBranch, optionDelete}
+	selected, err := prompter.Select("What would you like to do?", options)
 	if err != nil {
 		return Plan{}, err
 	}
-
-	if selected == 0 {
+	switch options[selected] {
+	case optionEnter:
+		return enterWorktree(worktrees, prompter)
+	case optionCreateFromBranch:
+		return createWorktreeFromBranch(config, worktrees, branches, prompter)
+	case optionDelete:
+		return deleteWorktree(worktrees, prompter)
+	default:
 		return createNewWorktree(config, prompter)
 	}
-	if selected == len(worktrees)+1 {
-		return deleteWorktree(worktrees, prompter)
-	}
+}
 
-	wt := worktrees[selected-1]
-	return Plan{Dir: wt.Path}, nil
+func enterWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err error) {
+	if len(worktrees) == 0 {
+		return Plan{}, errors.New("no worktrees to enter")
+	}
+	selected, err := prompter.Select("Enter which worktree?", worktreeOptions(worktrees))
+	if err != nil {
+		return Plan{}, err
+	}
+	return Plan{Dir: worktrees[selected].Path}, nil
 }
 
 func deleteWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err error) {
-	candidates := worktrees[1:] // exclude the main worktree
-	options := make([]string, len(candidates))
-	for i, wt := range candidates {
-		options[i] = wt.String()
+	if len(worktrees) <= 1 {
+		return Plan{}, errors.New("no worktrees to delete (the main worktree cannot be deleted)")
 	}
-
-	selected, err := prompter.Select("Delete which worktree?", options)
+	candidates := worktrees[1:] // exclude the main worktree
+	selected, err := prompter.Select("Delete which worktree?", worktreeOptions(candidates))
 	if err != nil {
 		return Plan{}, err
 	}
@@ -96,6 +118,13 @@ func deleteWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err e
 			{Name: "git", Args: []string{"branch", "-d", wt.Branch}},
 		},
 	}, nil
+}
+
+func worktreeOptions(worktrees []Worktree) (results []string) {
+	for _, wt := range worktrees {
+		results = append(results, wt.String())
+	}
+	return results
 }
 
 var validFeatureName = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$`)
@@ -119,6 +148,47 @@ func createNewWorktree(config Config, prompter Prompter) (result Plan, err error
 	}, nil
 }
 
+// createWorktreeFromBranch offers every branch not already checked out in a
+// worktree. A remote branch gets a new local branch of the same name that
+// tracks it. The worktree's directory is named for the branch, minus the
+// configured user prefix, with any remaining slashes turned into hyphens.
+func createWorktreeFromBranch(config Config, worktrees []Worktree, branches []Branch, prompter Prompter) (result Plan, err error) {
+	checkedOut := make(map[string]bool)
+	for _, wt := range worktrees {
+		checkedOut[wt.Branch] = true
+	}
+	var candidates []Branch
+	var options []string
+	for _, branch := range branches {
+		if !checkedOut[branch.Name] {
+			candidates = append(candidates, branch)
+			options = append(options, branch.String())
+		}
+	}
+	if len(candidates) == 0 {
+		return Plan{}, errors.New("no branches available (every branch is already checked out in a worktree)")
+	}
+
+	selected, err := prompter.Select("Create worktree from which branch?", options)
+	if err != nil {
+		return Plan{}, err
+	}
+
+	branch := candidates[selected]
+	name := strings.ReplaceAll(strings.TrimPrefix(branch.Name, config.User+"/"), "/", "-")
+	path := filepath.Join(config.WorkDir, config.ProjectName, name)
+	args := []string{"worktree", "add", path, branch.Name}
+	if branch.Remote != "" {
+		args = []string{"worktree", "add", "--track", "-b", branch.Name, path, branch.String()}
+	}
+	return Plan{
+		Commands: []Command{
+			{Name: "git", Args: args},
+		},
+		Dir: path,
+	}, nil
+}
+
 func ParsePorcelain(output string) (results []Worktree) {
 	var current Worktree
 	for _, line := range strings.Split(output, "\n") {
@@ -136,6 +206,33 @@ func ParsePorcelain(output string) (results []Worktree) {
 	}
 	if current.Path != "" {
 		results = append(results, current)
+	}
+	return results
+}
+
+// ParseBranches interprets the output of
+// `git for-each-ref --format=%(refname) refs/heads refs/remotes`, yielding all
+// local branches followed by each remote branch that has no local branch of
+// the same name.
+func ParseBranches(output string) (results []Branch) {
+	local := make(map[string]bool)
+	var remote []Branch
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if name, ok := strings.CutPrefix(line, "refs/heads/"); ok {
+			local[name] = true
+			results = append(results, Branch{Name: name})
+		} else if rest, ok := strings.CutPrefix(line, "refs/remotes/"); ok {
+			remoteName, name, found := strings.Cut(rest, "/")
+			if found && name != "HEAD" {
+				remote = append(remote, Branch{Name: name, Remote: remoteName})
+			}
+		}
+	}
+	for _, branch := range remote {
+		if !local[branch.Name] {
+			results = append(results, branch)
+		}
 	}
 	return results
 }

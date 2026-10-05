@@ -77,19 +77,54 @@ func TestParsePorcelainNoTrailingNewline(t *testing.T) {
 	}
 }
 
-func TestSelectExistingWorktree(t *testing.T) {
+var testConfig = Config{
+	User:        "mikewhat",
+	WorkDir:     "/Users/mike/work",
+	ProjectName: "project",
+}
+
+var testWorktrees = []Worktree{
+	{Path: "/Users/mike/src/project", Branch: "main"},
+	{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
+}
+
+func TestTopLevelMenu(t *testing.T) {
+	prompter := &fakePrompter{selectErrs: []error{errCanceled}}
+
+	_, err := Run(testConfig, testWorktrees, nil, prompter)
+
+	if !errors.Is(err, errCanceled) {
+		t.Errorf("expected %v, got %v", errCanceled, err)
+	}
+	expected := [][]string{
+		{"Enter worktree", "Create new worktree", "Create worktree from branch", "Delete worktree"},
+	}
+	if !reflect.DeepEqual(prompter.selectOptions, expected) {
+		t.Errorf("expected %+v, got %+v", expected, prompter.selectOptions)
+	}
+}
+
+func TestTopLevelMenuShownWithOnlyMainWorktree(t *testing.T) {
 	worktrees := []Worktree{
 		{Path: "/Users/mike/src/project", Branch: "main"},
-		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
 	}
-	prompter := &fakePrompter{selectIndices: []int{2}} // index 2 = second worktree (0 is "Create new")
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
+	prompter := &fakePrompter{selectErrs: []error{errCanceled}}
 
-	result, err := Run(config, worktrees, prompter)
+	_, err := Run(testConfig, worktrees, nil, prompter)
+
+	if !errors.Is(err, errCanceled) {
+		t.Errorf("expected %v, got %v", errCanceled, err)
+	}
+	if len(prompter.selectOptions) != 1 || len(prompter.selectOptions[0]) != 4 {
+		t.Errorf("expected the top-level menu, got %+v", prompter.selectOptions)
+	}
+}
+
+func TestEnterWorktree(t *testing.T) {
+	prompter := &fakePrompter{selectIndices: []int{0, 1}} // "Enter worktree", feature-one
+
+	result, err := Run(testConfig, testWorktrees, nil, prompter)
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,21 +134,41 @@ func TestSelectExistingWorktree(t *testing.T) {
 	}
 }
 
-func TestCreateNewWorktree(t *testing.T) {
-	worktrees := []Worktree{
-		{Path: "/Users/mike/src/project", Branch: "main"},
+func TestEnterMainWorktree(t *testing.T) {
+	prompter := &fakePrompter{selectIndices: []int{0, 0}} // "Enter worktree", main
+
+	result, err := Run(testConfig, testWorktrees, nil, prompter)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	expected := Plan{Dir: "/Users/mike/src/project"}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
+	}
+}
+
+func TestEnterWithNoWorktrees(t *testing.T) {
+	prompter := &fakePrompter{selectIndices: []int{0}} // "Enter worktree"
+
+	_, err := Run(testConfig, nil, nil, prompter)
+
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if prompter.selectCall != 1 {
+		t.Errorf("expected only the top-level menu, got %d selections", prompter.selectCall)
+	}
+}
+
+func TestCreateNewWorktree(t *testing.T) {
 	prompter := &fakePrompter{
-		selectIndices: []int{0}, // "Create new worktree"
+		selectIndices: []int{1}, // "Create new worktree"
 		inputText:     "my-feature",
 	}
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
 
-	result, err := Run(config, worktrees, prompter)
+	result, err := Run(testConfig, testWorktrees, nil, prompter)
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -130,68 +185,126 @@ func TestCreateNewWorktree(t *testing.T) {
 }
 
 func TestInvalidFeatureNames(t *testing.T) {
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
-	worktrees := []Worktree{
-		{Path: "/Users/mike/src/project", Branch: "main"},
-	}
-
 	invalid := []string{"has space", "special!char", "under_score", "dot.name", "slash/name", ""}
 	for _, name := range invalid {
-		prompter := &fakePrompter{selectIndices: []int{0}, inputText: name}
-		_, err := Run(config, worktrees, prompter)
+		prompter := &fakePrompter{selectIndices: []int{1}, inputText: name}
+		_, err := Run(testConfig, testWorktrees, nil, prompter)
 		if err == nil {
 			t.Errorf("expected error for feature name %q, got nil", name)
 		}
 	}
 }
 
-func TestNoWorktreesSkipsMenu(t *testing.T) {
-	prompter := &fakePrompter{
-		selectIndices: []int{-1},
-		selectErrs:    []error{errCanceled}, // Select should NOT be called
-		inputText:     "new-feature",
+func TestCreateWorktreeFromBranchOffersOnlyBranchesNotCheckedOut(t *testing.T) {
+	branches := []Branch{
+		{Name: "main"},
+		{Name: "mikewhat/feature-one"},
+		{Name: "mikewhat/feature-two"},
+		{Name: "alice/fix", Remote: "origin"},
 	}
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
+	prompter := &fakePrompter{selectIndices: []int{2, 0}} // "Create worktree from branch", feature-two
 
-	result, err := Run(config, nil, prompter)
+	_, err := Run(testConfig, testWorktrees, branches, prompter)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{"mikewhat/feature-two", "origin/alice/fix"}
+	if !reflect.DeepEqual(prompter.selectOptions[1], expected) {
+		t.Errorf("expected %+v, got %+v", expected, prompter.selectOptions[1])
+	}
+}
+
+func TestCreateWorktreeFromLocalBranch(t *testing.T) {
+	branches := []Branch{
+		{Name: "mikewhat/feature-two"},
+	}
+	prompter := &fakePrompter{selectIndices: []int{2, 0}} // "Create worktree from branch", feature-two
+
+	result, err := Run(testConfig, testWorktrees, branches, prompter)
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	expected := Plan{
 		Commands: []Command{
-			{Name: "git", Args: []string{"branch", "mikewhat/new-feature"}},
-			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/new-feature", "mikewhat/new-feature"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/feature-two", "mikewhat/feature-two"}},
 		},
-		Dir: "/Users/mike/work/project/new-feature",
+		Dir: "/Users/mike/work/project/feature-two",
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
 	}
 }
 
+func TestCreateWorktreeFromAnotherUsersBranch(t *testing.T) {
+	branches := []Branch{
+		{Name: "alice/fix/flaky-test"},
+	}
+	prompter := &fakePrompter{selectIndices: []int{2, 0}} // "Create worktree from branch", alice/fix/flaky-test
+
+	result, err := Run(testConfig, testWorktrees, branches, prompter)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/alice-fix-flaky-test", "alice/fix/flaky-test"}},
+		},
+		Dir: "/Users/mike/work/project/alice-fix-flaky-test",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
+	}
+}
+
+func TestCreateWorktreeFromRemoteBranch(t *testing.T) {
+	branches := []Branch{
+		{Name: "alice/fix", Remote: "origin"},
+	}
+	prompter := &fakePrompter{selectIndices: []int{2, 0}} // "Create worktree from branch", origin/alice/fix
+
+	result, err := Run(testConfig, testWorktrees, branches, prompter)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := Plan{
+		Commands: []Command{
+			{Name: "git", Args: []string{"worktree", "add", "--track", "-b", "alice/fix", "/Users/mike/work/project/alice-fix", "origin/alice/fix"}},
+		},
+		Dir: "/Users/mike/work/project/alice-fix",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("expected %+v, got %+v", expected, result)
+	}
+}
+
+func TestCreateWorktreeFromBranchWithNoCandidates(t *testing.T) {
+	branches := []Branch{
+		{Name: "main"},
+		{Name: "mikewhat/feature-one"},
+	}
+	prompter := &fakePrompter{selectIndices: []int{2}} // "Create worktree from branch"
+
+	_, err := Run(testConfig, testWorktrees, branches, prompter)
+
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if prompter.selectCall != 1 {
+		t.Errorf("expected only the top-level menu, got %d selections", prompter.selectCall)
+	}
+}
+
 func TestDeleteWorktree(t *testing.T) {
-	worktrees := []Worktree{
-		{Path: "/Users/mike/src/project", Branch: "main"},
-		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
-	}
 	prompter := &fakePrompter{
-		selectIndices: []int{3, 0}, // 3 = "Delete a worktree" (last), 0 = feature-one (main excluded from sub-menu)
-	}
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
+		selectIndices: []int{3, 0}, // "Delete worktree", feature-one (main excluded from sub-menu)
 	}
 
-	result, err := Run(config, worktrees, prompter)
+	result, err := Run(testConfig, testWorktrees, nil, prompter)
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -206,33 +319,59 @@ func TestDeleteWorktree(t *testing.T) {
 	}
 }
 
-func TestOnlyMainWorktreeSkipsToCreate(t *testing.T) {
+func TestDeleteWithOnlyMainWorktree(t *testing.T) {
 	worktrees := []Worktree{
 		{Path: "/Users/mike/src/project", Branch: "main"},
 	}
-	prompter := &fakePrompter{
-		selectErrs: []error{errCanceled}, // Select should NOT be called
-		inputText:  "new-feature",
-	}
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
+	prompter := &fakePrompter{selectIndices: []int{3}} // "Delete worktree"
 
-	result, err := Run(config, worktrees, prompter)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := Run(testConfig, worktrees, nil, prompter)
+
+	if err == nil {
+		t.Error("expected error, got nil")
 	}
-	expected := Plan{
-		Commands: []Command{
-			{Name: "git", Args: []string{"branch", "mikewhat/new-feature"}},
-			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/new-feature", "mikewhat/new-feature"}},
-		},
-		Dir: "/Users/mike/work/project/new-feature",
+	if prompter.selectCall != 1 {
+		t.Errorf("expected only the top-level menu, got %d selections", prompter.selectCall)
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("expected %+v, got %+v", expected, result)
+}
+
+func TestSubMenuCanceled(t *testing.T) {
+	for _, option := range []int{0, 2, 3} {
+		branches := []Branch{{Name: "mikewhat/feature-two"}}
+		prompter := &fakePrompter{
+			selectIndices: []int{option, 0},
+			selectErrs:    []error{nil, errCanceled},
+		}
+
+		result, err := Run(testConfig, testWorktrees, branches, prompter)
+
+		if !errors.Is(err, errCanceled) {
+			t.Errorf("option %d: expected %v, got %v", option, errCanceled, err)
+		}
+		if !reflect.DeepEqual(result, Plan{}) {
+			t.Errorf("option %d: expected empty plan, got %+v", option, result)
+		}
+	}
+}
+
+func TestParseBranches(t *testing.T) {
+	input := `refs/heads/main
+refs/heads/mikewhat/feature-one
+refs/remotes/origin/HEAD
+refs/remotes/origin/main
+refs/remotes/origin/alice/fix
+refs/remotes/upstream/bob/review
+`
+	results := ParseBranches(input)
+
+	expected := []Branch{
+		{Name: "main"},
+		{Name: "mikewhat/feature-one"},
+		{Name: "alice/fix", Remote: "origin"},
+		{Name: "bob/review", Remote: "upstream"},
+	}
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("expected %+v, got %+v", expected, results)
 	}
 }
 
@@ -264,32 +403,28 @@ func TestMergedWorktreesAreFlaggedInMenus(t *testing.T) {
 		{Path: "/Users/mike/work/project/feature-one", Branch: "mikewhat/feature-one"},
 		{Path: "/Users/mike/work/project/feature-two", Branch: "mikewhat/feature-two", Merged: true},
 	}
-	prompter := &fakePrompter{selectIndices: []int{4, 0}} // 4 = "Delete a worktree", 0 = feature-one
-	config := Config{
-		User:        "mikewhat",
-		WorkDir:     "/Users/mike/work",
-		ProjectName: "project",
-	}
+	enter := &fakePrompter{selectIndices: []int{0, 0}}  // "Enter worktree", main
+	remove := &fakePrompter{selectIndices: []int{3, 0}} // "Delete worktree", feature-one
 
-	_, err := Run(config, worktrees, prompter)
+	_, enterErr := Run(testConfig, worktrees, nil, enter)
+	_, removeErr := Run(testConfig, worktrees, nil, remove)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if enterErr != nil || removeErr != nil {
+		t.Fatalf("unexpected errors: %v, %v", enterErr, removeErr)
 	}
-	expected := [][]string{
-		{
-			"Create new worktree",
-			"main (/Users/mike/src/project)",
-			"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
-			"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
-			"Delete a worktree",
-		},
-		{
-			"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
-			"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
-		},
+	expectedEnter := []string{
+		"main (/Users/mike/src/project)",
+		"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
+		"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
 	}
-	if !reflect.DeepEqual(prompter.selectOptions, expected) {
-		t.Errorf("expected %+v, got %+v", expected, prompter.selectOptions)
+	if !reflect.DeepEqual(enter.selectOptions[1], expectedEnter) {
+		t.Errorf("expected %+v, got %+v", expectedEnter, enter.selectOptions[1])
+	}
+	expectedDelete := []string{
+		"mikewhat/feature-one (/Users/mike/work/project/feature-one)",
+		"mikewhat/feature-two (/Users/mike/work/project/feature-two) [merged]",
+	}
+	if !reflect.DeepEqual(remove.selectOptions[1], expectedDelete) {
+		t.Errorf("expected %+v, got %+v", expectedDelete, remove.selectOptions[1])
 	}
 }

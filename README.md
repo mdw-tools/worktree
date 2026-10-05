@@ -4,35 +4,40 @@ An interactive terminal program for managing git worktrees.
 
 ## Operation
 
-At startup, the tool detects any existing git worktrees for the repository associated with the working directory.
+At startup, the tool detects any existing git worktrees and branches for the
+repository associated with the working directory, then offers four options:
 
-All worktrees are displayed for selection, as well as an option to create a new worktree (that option should probably be the topmost in the list).
+- **Enter worktree**: lists all worktrees for selection. The tool spawns a
+  fresh shell (`$SHELL`) with its working directory set to the selected
+  worktree. Type `exit` to return to the original shell.
+- **Create new worktree**: asks for a hyphenated feature-name (only
+  alpha-numerics and hyphens, no spaces allowed), then prints the git commands
+  it intends to run and asks for confirmation:
 
-If the user selects an existing worktree, the tool spawns a fresh shell (`$SHELL`)
-with its working directory set to that worktree. Type `exit` to return to the
-original shell.
+  `git branch <user-prefix>/<feature-name>` followed by
+  `git worktree add <working-path-prefix>/<project-basename>/<feature-name> <user-prefix>/<feature-name>`
+- **Create worktree from branch**: lists every existing branch not already
+  checked out in a worktree (local branches, then remote branches with no
+  local counterpart) and, after confirmation, runs
+  `git worktree add <working-path-prefix>/<project-basename>/<dir> <branch>`.
+  For a remote branch it instead runs
+  `git worktree add --track -b <branch> <working-path-prefix>/<project-basename>/<dir> <remote>/<branch>`.
+  The `<dir>` is the branch name minus a leading `<user-prefix>/`, with any
+  remaining slashes replaced by hyphens (e.g. `alice/fix` becomes `alice-fix`).
+- **Delete worktree**: lists all worktrees except the main one, and runs
+  `git worktree remove <path>` and `git branch -d <branch>` after confirmation.
 
-If the user indicates they want to create a new worktree, the tool asks for a
-hyphenated feature-name (only alpha-numerics and hyphens, no spaces allowed),
-then prints the git commands it intends to run and asks for confirmation:
-
-`git branch <user-prefix>/<feature-name>` followed by
-`git worktree add <working-path-prefix>/<project-basename>/<feature-name> <user-prefix>/<feature-name>`
-
-On confirmation, those commands are executed directly (via `exec.Command`), and
-the tool then spawns a shell in the new worktree.
+On confirmation, commands are executed directly (via `exec.Command`), and when
+a worktree was created the tool then spawns a shell in it.
 
 - The <user-prefix> defaults to `mikewhat`, but can be modified by a CLI flag.
 - The <feature-name> is provided by the user (as previously specified)
-- The <working-path-prefix> defaults to `$HOME/work`, but can be overriden via CLI flag.
-- The project basename comes from the basename of the root directory of the current git repo.
-
-A worktree can also be deleted from the menu, which runs
-`git worktree remove <path>` and `git branch -d <branch>` after confirmation.
+- The <working-path-prefix> defaults to `$CODEPATH/work`, but can be overriden via CLI flag.
+- The project basename comes from the basename of the main worktree of the current git repo.
 
 Worktrees whose branch has already been merged into the main worktree's branch
-(per `git branch --merged`) are labeled `[merged]` in both the main menu and
-the delete menu, as a hint about what can be deleted.
+(per `git branch --merged`) are labeled `[merged]` in both the enter and delete
+menus, as a hint about what can be deleted.
 
 Because the git operations now run in-process behind a confirmation prompt, the
 tool no longer needs to be piped to `bash` or `pbcopy`.
