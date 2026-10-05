@@ -1,0 +1,5 @@
+{
+  "name": "worktree",
+  "description": "Git worktree management skill: create, enter, and delete worktrees using the conventions of the worktree tool.",
+  "version": "0.1.0"
+}

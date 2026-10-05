@@ -59,3 +59,14 @@ A worktree that fails to delete (e.g. one with uncommitted changes, which
 `git worktree remove` refuses) is reported at the end without stopping the
 rest. Note that a branch with no commits of its own (e.g. one just created)
 counts as merged, and squash-merged branches do not.
+
+## Claude Code skill
+
+This repository is also a Claude Code plugin (and a single-plugin marketplace)
+providing a `worktree` skill, which teaches Claude to create, enter, and
+delete worktrees using the same conventions as the tool. Install it with:
+
+```
+/plugin marketplace add mdw-tools/worktree
+/plugin install worktree@worktree
+```
