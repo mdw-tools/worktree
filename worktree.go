@@ -72,9 +72,22 @@ const (
 	optionDelete           = "Delete worktree"
 )
 
+// Run offers the top-level menu, whose title counts the linked worktrees (the
+// main worktree isn't counted). Entering and deleting are only offered when at
+// least one linked worktree exists.
 func Run(config Config, worktrees []Worktree, branches []Branch, prompter Prompter) (result Plan, err error) {
-	options := []string{optionEnter, optionCreate, optionCreateFromBranch, optionDelete}
-	selected, err := prompter.Select("What would you like to do?", options)
+	count := max(len(worktrees)-1, 0)
+	options := []string{optionCreate, optionCreateFromBranch}
+	if count > 0 {
+		options = []string{optionEnter, optionCreate, optionCreateFromBranch, optionDelete}
+	}
+	noun := "worktrees"
+	if count == 1 {
+		noun = "worktree"
+	}
+	title := fmt.Sprintf("%s has %d %s. What would you like to do?", config.ProjectName, count, noun)
+
+	selected, err := prompter.Select(title, options)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -91,9 +104,6 @@ func Run(config Config, worktrees []Worktree, branches []Branch, prompter Prompt
 }
 
 func enterWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err error) {
-	if len(worktrees) == 0 {
-		return Plan{}, errors.New("no worktrees to enter")
-	}
 	selected, err := prompter.Select("Enter which worktree?", worktreeOptions(worktrees))
 	if err != nil {
 		return Plan{}, err
@@ -102,9 +112,6 @@ func enterWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err er
 }
 
 func deleteWorktree(worktrees []Worktree, prompter Prompter) (result Plan, err error) {
-	if len(worktrees) <= 1 {
-		return Plan{}, errors.New("no worktrees to delete (the main worktree cannot be deleted)")
-	}
 	candidates := worktrees[1:] // exclude the main worktree
 	selected, err := prompter.Select("Delete which worktree?", worktreeOptions(candidates))
 	if err != nil {

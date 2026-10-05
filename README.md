@@ -5,7 +5,10 @@ An interactive terminal program for managing git worktrees.
 ## Operation
 
 At startup, the tool detects any existing git worktrees and branches for the
-repository associated with the working directory, then offers four options:
+repository associated with the working directory, then offers the options
+below. The menu's title shows how many worktrees exist (not counting the main
+worktree). When there are none, "Enter worktree" and "Delete worktree" are
+omitted.
 
 - **Enter worktree**: lists all worktrees for selection. The tool spawns a
   fresh shell (`$SHELL`) with its working directory set to the selected
