@@ -37,6 +37,11 @@ func main() {
 	}
 
 	worktrees := worktree.ParsePorcelain(porcelain)
+	if len(worktrees) > 0 {
+		// From within a linked worktree, --show-toplevel names that worktree;
+		// the project is named for the main worktree, which git lists first.
+		repoRoot = worktrees[0].Path
+	}
 	if len(worktrees) > 0 && worktrees[0].Branch != "" {
 		primary := worktrees[0]
 		merged, err := gitOutput("-C", primary.Path, "branch", "--merged", primary.Branch, "--format=%(refname:short)")
