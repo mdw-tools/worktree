@@ -50,8 +50,9 @@ tool no longer needs to be piped to `bash` or `pbcopy`.
 A separate tool for periodically sweeping away finished worktrees across all
 projects. It can be run from anywhere:
 
-1. It finds every repository with a worktree under `<workdir>/<project>/`
-   (`-workdir` defaults to `$CODEPATH/work`, same as `worktree`).
+1. It finds every repository with a worktree at `<workdir>/<project>-<feature>`
+   (or the older `<workdir>/<project>/<feature>`; `-workdir` defaults to
+   `$CODEPATH/work`, same as `worktree`).
 2. For each repository, it lists all worktrees, labeling those whose branch
    has been merged into the main worktree's branch (per `git branch --merged`).
 3. For each merged worktree, one at a time, it asks whether to delete it. On

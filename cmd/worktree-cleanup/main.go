@@ -18,7 +18,7 @@ var Version = "dev"
 
 func main() {
 	flags := flag.NewFlagSet(fmt.Sprintf("%s @ %s", filepath.Base(os.Args[0]), Version), flag.ExitOnError)
-	workDir := flags.String("workdir", filepath.Join(os.Getenv("CODEPATH"), "work"), "Working path prefix under which worktrees live (<workdir>/<project>/<feature>)")
+	workDir := flags.String("workdir", filepath.Join(os.Getenv("CODEPATH"), "work"), "Working path prefix under which worktrees live (<workdir>/<project>-<feature>)")
 	flags.Usage = func() {
 		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
 		_, _ = fmt.Fprintf(flags.Output(), "%s [flags]\n", filepath.Base(os.Args[0]))
@@ -27,9 +27,22 @@ func main() {
 	}
 	_ = flags.Parse(os.Args[1:])
 
-	dirs, err := filepath.Glob(filepath.Join(*workDir, "*", "*"))
+	// Worktrees live at <workdir>/<project>-<feature>; the older layout,
+	// <workdir>/<project>/<feature>, is still searched so that worktrees
+	// created before the change get cleaned up too.
+	dirs, err := filepath.Glob(filepath.Join(*workDir, "*"))
 	if err != nil {
 		log.Fatal(err)
+	}
+	legacyDirs, err := filepath.Glob(filepath.Join(*workDir, "*", "*"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, dir := range legacyDirs {
+		// Skip the contents of a worktree in the current layout.
+		if _, err := os.Stat(filepath.Join(filepath.Dir(dir), ".git")); err != nil {
+			dirs = append(dirs, dir)
+		}
 	}
 	repos := worktree.Repositories(dirs, gitCommonDir)
 	if len(repos) == 0 {
