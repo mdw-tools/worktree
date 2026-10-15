@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Create, enter, list, and delete git worktrees using the conventions of the `worktree` tool (branch `<user>/<feature>`, directory `$CODEPATH/work/<project>/<feature>`). Use when the user asks to start work in a new or separate worktree, to check out an existing branch (for example a PR branch to review) without disturbing the current checkout, to find or switch to a worktree, or to clean up finished worktrees.
+description: Create, enter, list, and delete git worktrees using the conventions of the `worktree` tool (branch `<user>/<feature>`, directory `$CODEPATH/work/<project>-<feature>`). Use when the user asks to start work in a new or separate worktree, to check out an existing branch (for example a PR branch to review) without disturbing the current checkout, to find or switch to a worktree, or to clean up finished worktrees.
 ---
 
 The user manages git worktrees with `worktree`, an interactive terminal tool. Claude cannot drive its menus, so run the equivalent git commands directly, following the same conventions so that the user's tool recognizes and lays out everything the same way.
@@ -38,7 +38,7 @@ Validate `<feature>` against the pattern above, then run:
 
 ```
 git branch <user>/<feature>
-git worktree add <workdir>/<project>/<feature> <user>/<feature>
+git worktree add <workdir>/<project>-<feature> <user>/<feature>
 ```
 
 `git branch` starts the new branch at the current `HEAD`, just like the tool. If the user names a different base, pass it as a start point: `git branch <user>/<feature> <base>`.
@@ -50,13 +50,13 @@ Skip any branch that is already checked out in a worktree (git refuses to check 
 For a local branch:
 
 ```
-git worktree add <workdir>/<project>/<dir> <branch>
+git worktree add <workdir>/<project>-<dir> <branch>
 ```
 
 For a branch that exists only on a remote (run `git fetch <remote>` first if the user wants the latest), create a local branch that tracks it:
 
 ```
-git worktree add --track -b <branch> <workdir>/<project>/<dir> <remote>/<branch>
+git worktree add --track -b <branch> <workdir>/<project>-<dir> <remote>/<branch>
 ```
 
 ## Enter a worktree
