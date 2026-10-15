@@ -18,13 +18,13 @@ omitted.
   it intends to run and asks for confirmation:
 
   `git branch <user-prefix>/<feature-name>` followed by
-  `git worktree add <working-path-prefix>/<project-basename>/<feature-name> <user-prefix>/<feature-name>`
+  `git worktree add <working-path-prefix>/<project-basename>-<feature-name> <user-prefix>/<feature-name>`
 - **Create worktree from branch**: lists every existing branch not already
   checked out in a worktree (local branches, then remote branches with no
   local counterpart) and, after confirmation, runs
-  `git worktree add <working-path-prefix>/<project-basename>/<dir> <branch>`.
+  `git worktree add <working-path-prefix>/<project-basename>-<dir> <branch>`.
   For a remote branch it instead runs
-  `git worktree add --track -b <branch> <working-path-prefix>/<project-basename>/<dir> <remote>/<branch>`.
+  `git worktree add --track -b <branch> <working-path-prefix>/<project-basename>-<dir> <remote>/<branch>`.
   The `<dir>` is the branch name minus a leading `<user-prefix>/`, with any
   remaining slashes replaced by hyphens (e.g. `alice/fix` becomes `alice-fix`).
 - **Delete worktree**: lists all worktrees except the main one, and runs

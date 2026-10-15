@@ -145,7 +145,7 @@ func createNewWorktree(config Config, prompter Prompter) (result Plan, err error
 		return Plan{}, fmt.Errorf("invalid feature name %q: must contain only alphanumerics and hyphens", feature)
 	}
 	branch := filepath.Join(config.User, feature)
-	path := filepath.Join(config.WorkDir, config.ProjectName, feature)
+	path := worktreePath(config, feature)
 	return Plan{
 		Commands: []Command{
 			{Name: "git", Args: []string{"branch", branch}},
@@ -157,8 +157,9 @@ func createNewWorktree(config Config, prompter Prompter) (result Plan, err error
 
 // createWorktreeFromBranch offers every branch not already checked out in a
 // worktree. A remote branch gets a new local branch of the same name that
-// tracks it. The worktree's directory is named for the branch, minus the
-// configured user prefix, with any remaining slashes turned into hyphens.
+// tracks it. The worktree's directory is named for the branch (after the
+// project prefix; see worktreePath), minus the configured user prefix, with
+// any remaining slashes turned into hyphens.
 func createWorktreeFromBranch(config Config, worktrees []Worktree, branches []Branch, prompter Prompter) (result Plan, err error) {
 	checkedOut := make(map[string]bool)
 	for _, wt := range worktrees {
@@ -183,7 +184,7 @@ func createWorktreeFromBranch(config Config, worktrees []Worktree, branches []Br
 
 	branch := candidates[selected]
 	name := strings.ReplaceAll(strings.TrimPrefix(branch.Name, config.User+"/"), "/", "-")
-	path := filepath.Join(config.WorkDir, config.ProjectName, name)
+	path := worktreePath(config, name)
 	args := []string{"worktree", "add", path, branch.Name}
 	if branch.Remote != "" {
 		args = []string{"worktree", "add", "--track", "-b", branch.Name, path, branch.String()}
@@ -194,6 +195,15 @@ func createWorktreeFromBranch(config Config, worktrees []Worktree, branches []Br
 		},
 		Dir: path,
 	}, nil
+}
+
+// worktreePath places a new worktree directly under the configured work
+// directory, its name prefixed by the project's: <workdir>/<project>-<name>.
+// Two projects can collide (project foo with feature bar-baz and project
+// foo-bar with feature baz); that's unlikely enough to accept, and git
+// refuses to add a worktree over an existing one anyway.
+func worktreePath(config Config, name string) string {
+	return filepath.Join(config.WorkDir, config.ProjectName+"-"+name)
 }
 
 func ParsePorcelain(output string) (results []Worktree) {

@@ -163,10 +163,10 @@ func TestCreateWithOnlyMainWorktree(t *testing.T) {
 	if createErr != nil || fromBranchErr != nil {
 		t.Fatalf("unexpected errors: %v, %v", createErr, fromBranchErr)
 	}
-	if createResult.Dir != "/Users/mike/work/project/my-feature" {
+	if createResult.Dir != "/Users/mike/work/project-my-feature" {
 		t.Errorf("expected new worktree, got %+v", createResult)
 	}
-	if fromBranchResult.Dir != "/Users/mike/work/project/feature-two" {
+	if fromBranchResult.Dir != "/Users/mike/work/project-feature-two" {
 		t.Errorf("expected worktree from branch, got %+v", fromBranchResult)
 	}
 }
@@ -213,9 +213,9 @@ func TestCreateNewWorktree(t *testing.T) {
 	expected := Plan{
 		Commands: []Command{
 			{Name: "git", Args: []string{"branch", "mikewhat/my-feature"}},
-			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/my-feature", "mikewhat/my-feature"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project-my-feature", "mikewhat/my-feature"}},
 		},
-		Dir: "/Users/mike/work/project/my-feature",
+		Dir: "/Users/mike/work/project-my-feature",
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
@@ -266,9 +266,9 @@ func TestCreateWorktreeFromLocalBranch(t *testing.T) {
 	}
 	expected := Plan{
 		Commands: []Command{
-			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/feature-two", "mikewhat/feature-two"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project-feature-two", "mikewhat/feature-two"}},
 		},
-		Dir: "/Users/mike/work/project/feature-two",
+		Dir: "/Users/mike/work/project-feature-two",
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
@@ -288,9 +288,9 @@ func TestCreateWorktreeFromAnotherUsersBranch(t *testing.T) {
 	}
 	expected := Plan{
 		Commands: []Command{
-			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project/alice-fix-flaky-test", "alice/fix/flaky-test"}},
+			{Name: "git", Args: []string{"worktree", "add", "/Users/mike/work/project-alice-fix-flaky-test", "alice/fix/flaky-test"}},
 		},
-		Dir: "/Users/mike/work/project/alice-fix-flaky-test",
+		Dir: "/Users/mike/work/project-alice-fix-flaky-test",
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
@@ -310,9 +310,9 @@ func TestCreateWorktreeFromRemoteBranch(t *testing.T) {
 	}
 	expected := Plan{
 		Commands: []Command{
-			{Name: "git", Args: []string{"worktree", "add", "--track", "-b", "alice/fix", "/Users/mike/work/project/alice-fix", "origin/alice/fix"}},
+			{Name: "git", Args: []string{"worktree", "add", "--track", "-b", "alice/fix", "/Users/mike/work/project-alice-fix", "origin/alice/fix"}},
 		},
-		Dir: "/Users/mike/work/project/alice-fix",
+		Dir: "/Users/mike/work/project-alice-fix",
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %+v, got %+v", expected, result)
